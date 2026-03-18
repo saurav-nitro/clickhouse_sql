@@ -31,23 +31,41 @@ AS
 SELECT
     toString(rf.itemId) AS itemid,
     rf.poNumber AS ponumber,
+    coalesce(rf.status,'Unknown') AS po_status,
     coalesce(scd.Brand_Internal_SKU_Code,'Unknown') AS brand_internal_sku_code,
     coalesce(scm.Brand_s_Choice,'Unknown') AS brands_choice,
     toString(rf.organizationId) AS organizationid,
-    coalesce(rf.status,'Unknown') AS po_status,
     toDate(rf.poDate) AS orderdate,
 
     anyState(ifNull(rf.name,'Unknown')) AS itemname,
-    anyState(toString(scd.Instamart_Item_Code)) AS productid,
+
+    anyState(ifNull(toString(scd.Instamart_Item_Code),'Unknown')) AS productid,
+
     anyState(toFloat64(ifNull(rf.mrp,0))) AS mrp,
-    anyState(toDate(rf.appointmentDate)) AS appointmentdate,
-    anyState(toDate(rf.expiryDate)) AS expirydate,
-    anyState(coalesce(rf.facilityName,'Unknown')) AS backendfacilityname,
-    anyState(coalesce(rf.status,'Unknown')) AS po_status,
+
+    anyState(ifNull(toDate(rf.appointmentDate),toDate('1970-01-01'))) AS appointmentdate,
+
+    anyState(ifNull(toDate(rf.expiryDate),toDate('1970-01-01'))) AS expirydate,
+
+    anyState(ifNull(rf.facilityName,'Unknown')) AS backendfacilityname,
+
     anyState(toFloat64(ifNull(rf.unitsOrdered,0))) AS quantity,
-    anyState(toFloat64(ifNull(rf.unitsOrdered,0) - ifNull(rf.remainingQuantity,0)) ) AS grn_quantity,
+
+    anyState(
+        toFloat64(ifNull(rf.unitsOrdered,0) - ifNull(rf.remainingQuantity,0))
+    ) AS grn_quantity,
+
     anyState(toFloat64(ifNull(rf.totalAmount,0))) AS total_amount,
-    anyState( 1.0 - toFloat64(ifNull(rf.remainingQuantity,0)) / nullIf(toFloat64(ifNull(rf.unitsOrdered,0)),0) ) AS fill_rate_sku
+
+    anyState(
+        ifNull(
+            1 - (
+                toFloat64(ifNull(rf.remainingQuantity,0)) /
+                nullIf(toFloat64(ifNull(rf.unitsOrdered,0)),0)
+            ),
+            0
+        )
+    ) AS fill_rate_sku
 
 FROM InstamartReportFulfillment rf
 
@@ -62,8 +80,88 @@ LEFT JOIN Static_Combined_Data scd
 GROUP BY
     itemid,
     ponumber,
+    po_status,
     brand_internal_sku_code,
     brands_choice,
     organizationid,
-    po_status,
     orderdate;
+
+
+
+
+INSERT INTO Instamart_Combined_Fulfillment_Report
+(
+    itemid,
+    ponumber,
+    po_status,
+    brand_internal_sku_code,
+    brands_choice,
+    organizationid,
+    orderdate,
+    itemname,
+    productid,
+    mrp,
+    appointmentdate,
+    expirydate,
+    backendfacilityname,
+    quantity,
+    grn_quantity,
+    total_amount,
+    fill_rate_sku
+)
+
+SELECT
+    toString(rf.itemId),
+    rf.poNumber,
+    coalesce(rf.status,'Unknown'),
+    coalesce(scd.Brand_Internal_SKU_Code,'Unknown'),
+    coalesce(scm.Brand_s_Choice,'Unknown'),
+    toString(rf.organizationId),
+    toDate(rf.poDate),
+
+    anyState(ifNull(rf.name,'Unknown')),
+    anyState(ifNull(toString(scd.Instamart_Item_Code),'Unknown')),
+    anyState(toFloat64(ifNull(rf.mrp,0))),
+
+    anyState(ifNull(toDate(rf.appointmentDate),toDate('1970-01-01'))),
+    anyState(ifNull(toDate(rf.expiryDate),toDate('1970-01-01'))),
+
+    anyState(ifNull(rf.facilityName,'Unknown')),
+
+    anyState(toFloat64(ifNull(rf.unitsOrdered,0))),
+
+    anyState(
+        toFloat64(ifNull(rf.unitsOrdered,0) - ifNull(rf.remainingQuantity,0))
+    ),
+
+    anyState(toFloat64(ifNull(rf.totalAmount,0))),
+
+    anyState(
+        ifNull(
+            1 - (
+                toFloat64(ifNull(rf.remainingQuantity,0)) /
+                nullIf(toFloat64(ifNull(rf.unitsOrdered,0)),0)
+            ),
+            0
+        )
+    )
+
+FROM InstamartReportFulfillment rf
+
+LEFT JOIN Static_City_Mapping scm
+    ON rf.facilityName = scm.Instamart
+   AND rf.organizationId = scm.organizationid
+
+LEFT JOIN Static_Combined_Data scd
+    ON rf.itemId = scd.Instamart_SKU_Code
+   AND rf.organizationId = scd.organizationid
+
+GROUP BY
+    itemid,
+    ponumber,
+    po_status,
+    brand_internal_sku_code,
+    brands_choice,
+    organizationid,
+    orderdate;
+

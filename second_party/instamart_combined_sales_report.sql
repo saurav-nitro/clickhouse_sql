@@ -29,46 +29,66 @@ ORDER BY (organizationid, reportdate, brands_choice, category, subcategory, item
 
 
 CREATE MATERIALIZED VIEW Instamart_Combined_Sales_Report_MV
-TO Instamart_Combined_Sales_Report AS
+TO Instamart_Combined_Sales_Report
+AS
 SELECT
-    sr.itemCode AS itemid,
-    coalesce(scm.Brand_s_Choice,'Unknown') AS brands_choice,
+    toString(sr.itemCode) AS itemid,
+
+    ifNull(scm.Brand_s_Choice,'Unknown') AS brands_choice,
+
     toDate(sr.reportDate) AS reportdate,
-    sr.organizationId AS organizationid,
 
-    anyState(scd.Instamart_Item_Code) AS productid,
-    anyState(sr.productName) AS itemname,
-    anyState(coalesce(scd.Category,'Unknown')) AS category,
-    anyState(coalesce(scd.Sub__Category,'Unknown')) AS subcategory,
-    anyState(coalesce(scd.Brand_Internal_SKU_Code,'Unknown')) AS brand_internal_sku_code,
+    toString(sr.organizationId) AS organizationid,
 
-    anyState(toFloat64(ifNull(scd.COGS,0))) AS cogs,
-    anyState(ifNull(scd.instamart_margin,0)) AS margin,
-    anyState(toFloat64(ifNull(scd.TAXES,0))) AS tax_rate,
-    anyState(toBoolean(ifNull(scd.instamart_active,0))) AS active,
-    anyState(coalesce(scd.brand,'Unknown')) AS brand,
+    anyState(ifNull(scd.Instamart_Item_Code,'Unknown')) AS productid,
 
-    sumState(ifNull(sr.finalQtyYesterday,0)) AS qty,
+    anyState(ifNull(sr.productName,'Unknown')) AS itemname,
+
+    anyState(ifNull(scd.Category,'Unknown')) AS category,
+
+    anyState(ifNull(scd.Sub__Category,'Unknown')) AS subcategory,
+
+    anyState(ifNull(scd.Brand_Internal_SKU_Code,'Unknown')) AS brand_internal_sku_code,
+
+    anyState(assumeNotNull(toFloat64OrZero(scd.COGS))) AS cogs,
+
+    anyState(ifNull(scd.instamart_margin,0.0)) AS margin,
+
+    anyState(assumeNotNull(toFloat64OrZero(scd.TAXES))) AS tax_rate,
+
+    anyState(ifNull(toUInt8(scd.instamart_active),0)) AS active,
+
+    anyState(ifNull(scd.brand,'Unknown')) AS brand,
+
+    sumState(toFloat64(ifNull(sr.finalQtyYesterday,0))) AS qty,
+
     anyState(toFloat64(ifNull(sr.finalMrp,0))) AS mrp,
+
     sumState(toFloat64(ifNull(sr.finalGmvYesterday,0))) AS gmv,
+
     sumState(
         toFloat64(ifNull(sr.finalGmvYesterday,0)) *
         (1 - ifNull(scd.instamart_margin,0)/100.0) /
-        (1 + toFloat64(ifNull(scd.TAXES,0))/100.0)
+        (1 + assumeNotNull(toFloat64OrZero(scd.TAXES))/100.0)
     ) AS net,
+
     sumState(
         toFloat64(ifNull(sr.finalGmvYesterday,0)) *
         (1 - ifNull(scd.instamart_margin,0)/100.0) /
-        (1 + toFloat64(ifNull(scd.TAXES,0))/100.0) *
-        (toFloat64(ifNull(scd.TAXES,0))/100.0)
+        (1 + assumeNotNull(toFloat64OrZero(scd.TAXES))/100.0) *
+        (assumeNotNull(toFloat64OrZero(scd.TAXES))/100.0)
     ) AS taxes_paid
+
 FROM InstamartReportSales sr
+
 LEFT JOIN Static_City_Mapping scm
-    ON sr.city = scm.Instamart
-    AND sr.organizationId = scm.organizationid
+ON sr.city = scm.Instamart
+AND sr.organizationId = scm.organizationid
+
 LEFT JOIN Static_Combined_Data scd
-    ON sr.itemCode = scd.Instamart_SKU_Code
-    AND sr.organizationId = scd.organizationid
+ON sr.itemCode = scd.Instamart_SKU_Code
+AND sr.organizationId = scd.organizationid
+
 GROUP BY
     itemid,
     reportdate,
@@ -76,48 +96,93 @@ GROUP BY
     organizationid;
 
 
+
+
 INSERT INTO Instamart_Combined_Sales_Report
+(
+itemid,
+brands_choice,
+reportdate,
+category,
+subcategory,
+organizationid,
+productid,
+itemname,
+brand_internal_sku_code,
+cogs,
+margin,
+tax_rate,
+active,
+brand,
+qty,
+mrp,
+gmv,
+net,
+taxes_paid
+)
+
 SELECT
-    sr.itemCode AS itemid,
-    coalesce(scm.Brand_s_Choice,'Unknown') AS brands_choice,
-    toDate(sr.reportDate) AS reportdate,
-    sr.organizationId AS organizationid,
+toString(sr.itemCode) AS itemid,
 
-    anyState(scd.Instamart_Item_Code) AS productid,
-    anyState(sr.productName) AS itemname,
-    anyState(coalesce(scd.Category,'Unknown')) AS category,
-    anyState(coalesce(scd.Sub__Category,'Unknown')) AS subcategory,
-    anyState(coalesce(scd.Brand_Internal_SKU_Code,'Unknown')) AS brand_internal_sku_code,
+ifNull(scm.Brand_s_Choice,'Unknown') AS brands_choice,
 
-    anyState(toFloat64(ifNull(scd.COGS,0))) AS cogs,
-    anyState(ifNull(scd.instamart_margin,0)) AS margin,
-    anyState(toFloat64(ifNull(scd.TAXES,0))) AS tax_rate,
-    anyState(toBoolean(ifNull(scd.instamart_active,0))) AS active,
-    anyState(coalesce(scd.brand,'Unknown')) AS brand,
+toDate(sr.reportDate) AS reportdate,
 
-    sumState(ifNull(sr.finalQtyYesterday,0)) AS qty,
-    anyState(toFloat64(ifNull(sr.finalMrp,0))) AS mrp,
-    sumState(toFloat64(ifNull(sr.finalGmvYesterday,0))) AS gmv,
-    sumState(
-        toFloat64(ifNull(sr.finalGmvYesterday,0)) *
-        (1 - ifNull(scd.instamart_margin,0)/100.0) /
-        (1 + toFloat64(ifNull(scd.TAXES,0))/100.0)
-    ) AS net,
-    sumState(
-        toFloat64(ifNull(sr.finalGmvYesterday,0)) *
-        (1 - ifNull(scd.instamart_margin,0)/100.0) /
-        (1 + toFloat64(ifNull(scd.TAXES,0))/100.0) *
-        (toFloat64(ifNull(scd.TAXES,0))/100.0)
-    ) AS taxes_paid
+anyState(ifNull(scd.Category,'Unknown')) AS category,
+
+anyState(ifNull(scd.Sub__Category,'Unknown')) AS subcategory,
+
+toString(sr.organizationId) AS organizationid,
+
+anyState(ifNull(scd.Instamart_Item_Code,'Unknown')) AS productid,
+
+anyState(ifNull(sr.productName,'Unknown')) AS itemname,
+
+anyState(ifNull(scd.Brand_Internal_SKU_Code,'Unknown')) AS brand_internal_sku_code,
+
+anyState(assumeNotNull(toFloat64OrZero(scd.COGS))) AS cogs,
+
+anyState(ifNull(scd.instamart_margin,0.0)) AS margin,
+
+anyState(assumeNotNull(toFloat64OrZero(scd.TAXES))) AS tax_rate,
+
+anyState(ifNull(toUInt8(scd.instamart_active),0)) AS active,
+
+anyState(ifNull(scd.brand,'Unknown')) AS brand,
+
+sumState(toFloat64(ifNull(sr.finalQtyYesterday,0))) AS qty,
+
+anyState(toFloat64(ifNull(sr.finalMrp,0))) AS mrp,
+
+sumState(toFloat64(ifNull(sr.finalGmvYesterday,0))) AS gmv,
+
+sumState(
+toFloat64(ifNull(sr.finalGmvYesterday,0))
+*(1-ifNull(scd.instamart_margin,0)/100)
+/
+(1+assumeNotNull(toFloat64OrZero(scd.TAXES))/100)
+) AS net,
+
+sumState(
+toFloat64(ifNull(sr.finalGmvYesterday,0))
+*(1-ifNull(scd.instamart_margin,0)/100)
+/
+(1+assumeNotNull(toFloat64OrZero(scd.TAXES))/100)
+*(assumeNotNull(toFloat64OrZero(scd.TAXES))/100)
+) AS taxes_paid
+
 FROM InstamartReportSales sr
+
 LEFT JOIN Static_City_Mapping scm
-    ON sr.city = scm.Instamart
-    AND sr.organizationId = scm.organizationid
+ON sr.city=scm.Instamart
+AND sr.organizationId=scm.organizationid
+
 LEFT JOIN Static_Combined_Data scd
-    ON sr.itemCode = scd.Instamart_SKU_Code
-    AND sr.organizationId = scd.organizationid
+ON sr.itemCode=scd.Instamart_SKU_Code
+AND sr.organizationId=scd.organizationid
+
 GROUP BY
-    itemid,
-    reportdate,
-    brands_choice,
-    organizationid;    
+itemid,
+brands_choice,
+reportdate,
+organizationid;

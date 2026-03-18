@@ -149,11 +149,11 @@ FROM (
 -- INITIAL BACKFILL INSERT
 -- Run ONCE after creating the table and MV to populate
 -- Zepto_Availability with all historical data from
--- BlinkitProductMerchant_daily. The MV will handle new
+-- ZeptoProductMerchant_daily. The MV will handle new
 -- inserts going forward automatically.
 -- ============================================================
 
-INSERT INTO Blinkit_Availability
+INSERT INTO Zepto_Availability
 WITH merchant_weights AS (
     SELECT
         merchantid,
@@ -165,7 +165,7 @@ WITH merchant_weights AS (
                 nullIf(sumMerge(category_daily_sales), 0),
             0.0
         ) AS merchant_weight
-    FROM Blinkit_Merchant_Weight
+    FROM Zepto_Merchant_Weight
     GROUP BY
         merchantid,
         categoryid,
@@ -179,7 +179,7 @@ city_weights AS (
         p.subcategoryid,
         p.cdate,
         sum(mw.merchant_weight) AS city_category_weight
-    FROM BlinkitProductMerchant_daily AS p
+    FROM ZeptoProductMerchant_daily AS p
     LEFT JOIN merchant_weights AS mw
         ON  mw.merchantid    = p.merchantid
         AND mw.categoryid    = p.categoryid
@@ -203,7 +203,7 @@ SELECT
     toFloat64(sum(sign(pm.inventory)))                              AS avl_count,
     toFloat64(sum(mw.merchant_weight))                              AS lst,
     toFloat64(sum(sign(pm.inventory) * mw.merchant_weight))         AS avl
-FROM BlinkitProductMerchant_daily AS pm
+FROM ZeptoProductMerchant_daily AS pm
 LEFT JOIN merchant_weights AS mw
     ON  mw.merchantid    = pm.merchantid
     AND mw.categoryid    = pm.categoryid

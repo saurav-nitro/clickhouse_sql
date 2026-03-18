@@ -235,6 +235,6 @@ SELECT toDate(pm.createdAt) AS cdate, toString(pm.productId) AS productid, toStr
     anyIf(toString(p.subCategoryId), p.subCategoryId IS NOT NULL) AS subcategoryid, anyIf(m.cityName, m.cityName IS NOT NULL) AS cityname,
     anyIf(toString(p.isCombo), p.isCombo IS NOT NULL) AS iscombo, anyIf(toString(p.unit), p.unit IS NOT NULL) AS unit,
     max(toFloat64(p.mrp)) AS mrp, avg(toFloat64(pm.inventory)) AS inventory, avg(toFloat64(pm.discount)) AS discount, avg(toFloat64(pm.price)) AS price
-FROM ZeptoProductMerchant AS pm JOIN ZeptoProduct AS p ON pm.productId = p.id JOIN ZeptoMerchantn AS m ON pm.merchantId = m.id
+FROM ZeptoProductMerchant AS pm JOIN ZeptoProduct AS p ON pm.productId = p.id JOIN ZeptoMerchant AS m ON pm.merchantId = m.id
 WHERE p.isCombo = 'false' AND toDate(pm.createdAt) = today() - 15
 GROUP BY cdate, productid, merchantid;
